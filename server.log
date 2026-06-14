@@ -1,0 +1,26 @@
+
+> typescript-webserver@1.0.0 dev
+> npx tsc --watch & nodemon dist/index.js
+
+[33m[nodemon] 3.1.14[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node dist/index.js`[39m
+Server running on port 8080...
+[2J[3J[H12:11:17 AM - Starting compilation in watch mode...
+
+[32m[nodemon] restarting due to changes...[39m
+
+12:11:18 AM - Found 0 errors. Watching for file changes.
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node dist/index.js`[39m
+Server running on port 8080...
+[NON-OK] GET /non-existent-path - Status: 404
+[NON-OK] GET / - Status: 304
+[NON-OK] GET /assets/logo.png - Status: 304
+[NON-OK] GET /assets/logo.png - Status: 304
+Server is ready!
+[NON-OK] GET /healthz - Status: 304
+Server is ready!
+[NON-OK] GET /healthz - Status: 304
