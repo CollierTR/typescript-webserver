@@ -8,6 +8,7 @@ const PORT = 8080;
 
 const app = express();
 
+app.use(express.json());
 app.use(logResponses);
 
 app.get("/api/healthz", (req, res) => {
@@ -39,6 +40,34 @@ app.use(
   userMetrics,
   express.static(path.join(import.meta.dirname, "..", "src", "app")),
 );
+
+app.post("/api/validate_chirp", (req, res) => {
+  const badWords = ["kerfuffle", "sharbert", "fornax"];
+
+  try {
+    console.log(req.body);
+    const chirp: string = req.body?.body;
+    if (chirp.length <= 140) {
+      const dirtyWords = chirp.split(" ");
+      const cleanedWords = dirtyWords.map((word) => {
+        if (badWords.includes(word.toLowerCase())) {
+          return "****";
+        } else {
+          return word;
+        }
+      });
+      res.status(200).json({
+        valid: true,
+        dirtyBody: chirp,
+        cleanedBody: cleanedWords.join(" "),
+      });
+    } else {
+      res.status(400).json({ error: "Chirp is too long" });
+    }
+  } catch (e) {
+    res.status(400).json({ error: "Something went wrong" });
+  }
+});
 
 app
   .listen(PORT, () => {
