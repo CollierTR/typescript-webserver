@@ -1,10 +1,22 @@
 import { Request, Response, NextFunction } from "express";
 import { config } from "./config.js";
+import {
+  BadRequestError,
+  NotFoundError,
+  UnathorizedError,
+  ForbiddenError,
+} from "./classes/errors.js";
 
 type Middleware = (req: Request, res: Response, next: NextFunction) => void;
+type ErrorMiddleware = (
+  err: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => void;
 
 export const userMetrics: Middleware = (req, res, next) => {
-  config.fileserverHits++;
+  config.api.fileserverHits++;
   next();
 };
 
@@ -17,4 +29,34 @@ export const logResponses: Middleware = (req, res, next) => {
     }
   });
   next();
+};
+
+export const errorHandler: ErrorMiddleware = (err, req, res, next) => {
+  console.log(err);
+  if (err instanceof BadRequestError) {
+    res.status(400).json({
+      error: err.message,
+    });
+    next();
+  } else if (err instanceof UnathorizedError) {
+    res.status(401).json({
+      error: err.message,
+    });
+    next();
+  } else if (err instanceof ForbiddenError) {
+    res.status(403).json({
+      error: err.message,
+    });
+    next();
+  } else if (err instanceof NotFoundError) {
+    res.status(404).json({
+      error: err.message,
+    });
+    next();
+  } else {
+    // res.status(500).json({
+    //   error: "Something went wrong...",
+    // });
+    next();
+  }
 };

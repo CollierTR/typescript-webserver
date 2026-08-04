@@ -2,7 +2,19 @@ import express from "express";
 import { Request, Response } from "express";
 import path from "path";
 import { logResponses, userMetrics } from "./middleware.js";
+import { errorHandler } from "./middleware.js";
+import { BadRequestError } from "./classes/errors.js";
 import { config } from "./config.js";
+
+process.loadEnvFile("../.env");
+
+import postgres from "postgres";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
+
+import { drizzle } from "drizzle-orm/postgres-js";
+
+const migrationClient = postgres(config.db.url, { max: 1 });
+await migrate(drizzle(migrationClient), config.db.migrationConfig);
 
 const PORT = 8080;
 
@@ -17,18 +29,18 @@ app.get("/api/healthz", (req, res) => {
 });
 
 app.get("/admin/metrics", (req, res) => {
-  console.log(`Hits: ${config.fileserverHits}`);
+  console.log(`Hits: ${config.api.fileserverHits}`);
   res.set("Content-Type", "text/html; charset=utf-8").status(200).send(`<html>
   <body>
     <h1>Welcome, Chirpy Admin</h1>
-    <p>Chirpy has been visited ${config.fileserverHits} times!</p>
+    <p>Chirpy has been visited ${config.api.fileserverHits} times!</p>
   </body>
 </html>`);
 });
 
 app.post("/admin/reset", (req, res) => {
   console.log(`Resetting user metrics count...`);
-  config.fileserverHits = 0;
+  config.api.fileserverHits = 0;
   res
     .set("Content-Type", "text/plain; charset=utf-8")
     .status(200)
@@ -44,30 +56,28 @@ app.use(
 app.post("/api/validate_chirp", (req, res) => {
   const badWords = ["kerfuffle", "sharbert", "fornax"];
 
-  try {
-    console.log(req.body);
-    const chirp: string = req.body?.body;
-    if (chirp.length <= 140) {
-      const dirtyWords = chirp.split(" ");
-      const cleanedWords = dirtyWords.map((word) => {
-        if (badWords.includes(word.toLowerCase())) {
-          return "****";
-        } else {
-          return word;
-        }
-      });
-      res.status(200).json({
-        valid: true,
-        dirtyBody: chirp,
-        cleanedBody: cleanedWords.join(" "),
-      });
-    } else {
-      res.status(400).json({ error: "Chirp is too long" });
-    }
-  } catch (e) {
-    res.status(400).json({ error: "Something went wrong" });
+  console.log(req.body);
+  const chirp: string = req.body?.body;
+  if (chirp.length <= 140) {
+    const dirtyWords = chirp.split(" ");
+    const cleanedWords = dirtyWords.map((word) => {
+      if (badWords.includes(word.toLowerCase())) {
+        return "****";
+      } else {
+        return word;
+      }
+    });
+    res.status(200).json({
+      valid: true,
+      dirtyBody: chirp,
+      cleanedBody: cleanedWords.join(" "),
+    });
+  } else {
+    throw new BadRequestError("Chirp is too long. Max length is 140");
   }
 });
+
+app.use(errorHandler);
 
 app
   .listen(PORT, () => {
