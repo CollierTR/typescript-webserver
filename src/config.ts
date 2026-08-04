@@ -8,6 +8,7 @@ const migrationConfig: MigrationConfig = {
 type DBConfig = {
   url: string;
   migrationConfig: MigrationConfig;
+  platform: string;
 };
 
 type APIConfig = {
@@ -26,5 +27,6 @@ export const config: Config = {
   db: {
     url: process.env.DB_URL!,
     migrationConfig: migrationConfig,
+    platform: process.env.PLATFORM!,
   },
 };

@@ -5,16 +5,9 @@ import { logResponses, userMetrics } from "./middleware.js";
 import { errorHandler } from "./middleware.js";
 import { BadRequestError } from "./classes/errors.js";
 import { config } from "./config.js";
-
-process.loadEnvFile("../.env");
-
-import postgres from "postgres";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
-
-import { drizzle } from "drizzle-orm/postgres-js";
-
-const migrationClient = postgres(config.db.url, { max: 1 });
-await migrate(drizzle(migrationClient), config.db.migrationConfig);
+import { users, type NewUser } from "./db/schema.js";
+import { db } from "./db/index.js";
+import { eq } from "drizzle-orm";
 
 const PORT = 8080;
 
@@ -22,6 +15,40 @@ const app = express();
 
 app.use(express.json());
 app.use(logResponses);
+
+app.post("/api/users", async (req, res) => {
+  const body = req.body;
+  const { email } = body;
+  if (!email) {
+    return res
+      .set("Content-Type", "text/plain; charset=utf-8")
+      .status(400)
+      .send("email is a required parameter");
+  }
+
+  const user: NewUser = {
+    email: email,
+  };
+
+  //check for user
+  const existingUser = await db.query.users.findFirst({
+    where: eq(users.email, email),
+  });
+
+  if (existingUser) {
+    return res
+      .set("Content-Type", "text/plain; charset=utf-8")
+      .status(400)
+      .send("User is already registered");
+  }
+
+  const [newUser] = await db.insert(users).values(user).returning();
+
+  return res
+    .set("Content-Type", "text/plain; charset=utf-8")
+    .status(201)
+    .json(newUser);
+});
 
 app.get("/api/healthz", (req, res) => {
   console.log("Server is ready!");
@@ -38,13 +65,33 @@ app.get("/admin/metrics", (req, res) => {
 </html>`);
 });
 
-app.post("/admin/reset", (req, res) => {
+app.post("/admin/reset", async (req, res) => {
+  const PLATFORM = config.db.platform;
+
+  if (PLATFORM !== "dev") {
+    res
+      .set("Content-Type", "text/plain; charset=utf-8")
+      .status(403)
+      .send(`This can only be run in the dev environment!`);
+  }
+
   console.log(`Resetting user metrics count...`);
   config.api.fileserverHits = 0;
-  res
-    .set("Content-Type", "text/plain; charset=utf-8")
-    .status(200)
-    .send(`Reset user metric count`);
+
+  try {
+    console.log(`Deleting all users from the users table...`);
+    await db.delete(users);
+    res
+      .set("Content-Type", "text/plain; charset=utf-8")
+      .status(200)
+      .send(`DB reset!`);
+  } catch (err) {
+    console.log(err);
+    res
+      .set("Content-Type", "application/json; charset=utf-8")
+      .status(500)
+      .json({ error: "Something went wrong!" });
+  }
 });
 
 app.use(
