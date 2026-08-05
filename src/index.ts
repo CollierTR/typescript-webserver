@@ -3,9 +3,9 @@ import { Request, Response } from "express";
 import path from "path";
 import { logResponses, userMetrics } from "./middleware.js";
 import { errorHandler } from "./middleware.js";
-import { BadRequestError } from "./classes/errors.js";
+import { BadRequestError, NotFoundError } from "./classes/errors.js";
 import { config } from "./config.js";
-import { users, type NewUser } from "./db/schema.js";
+import { chirps, type NewChirp, users, type NewUser } from "./db/schema.js";
 import { db } from "./db/index.js";
 import { eq } from "drizzle-orm";
 
@@ -100,35 +100,64 @@ app.use(
   express.static(path.join(import.meta.dirname, "..", "src", "app")),
 );
 
-app.post("/api/validate_chirp", (req, res) => {
+app.get("/api/chirps", async (req, res) => {
+  const allChirps = await db.select().from(chirps).orderBy(chirps.createdAt);
+
+  res.status(200).json(allChirps);
+});
+
+app.get("/api/chirps/:chirpId", async (req, res) => {
+  const { chirpId } = req.params;
+  const [chirp] = await db.select().from(chirps).where(eq(chirps.id, chirpId));
+
+  if (!chirp) {
+    throw new NotFoundError("Resource not found");
+  }
+
+  res.status(200).json(chirp);
+});
+
+app.post("/api/chirps", async (req, res) => {
   const badWords = ["kerfuffle", "sharbert", "fornax"];
 
-  console.log(req.body);
-  const chirp: string = req.body?.body;
-  if (chirp.length <= 140) {
-    const dirtyWords = chirp.split(" ");
-    const cleanedWords = dirtyWords.map((word) => {
-      if (badWords.includes(word.toLowerCase())) {
-        return "****";
-      } else {
-        return word;
-      }
-    });
-    res.status(200).json({
-      valid: true,
-      dirtyBody: chirp,
-      cleanedBody: cleanedWords.join(" "),
-    });
-  } else {
+  // extract and validate the body (userId, body) (userId, body)
+  const { userId, body } = req.body;
+
+  if (!userId || !body) {
+    throw new BadRequestError(
+      "Require both userId and body in request payload",
+    );
+  }
+
+  if (typeof userId !== "string" || typeof body !== "string") {
+    throw new BadRequestError("Invalid request");
+  }
+
+  if (body.length > 140) {
     throw new BadRequestError("Chirp is too long. Max length is 140");
   }
+  const dirtyWords = body.split(" ");
+
+  const cleanedWords = dirtyWords.map((word) =>
+    badWords.includes(word.toLowerCase()) ? "****" : word,
+  );
+
+  const cleanedBody = cleanedWords.join(" ");
+
+  const chirp = { body: cleanedBody, userId };
+
+  const [newChirp] = await db.insert(chirps).values(chirp).returning();
+
+  res.status(201).json(newChirp);
 });
 
 app.use(errorHandler);
 
 app
   .listen(PORT, () => {
-    console.log(`Server running on port ${PORT}...`);
+    console.log(
+      `Server running on port ${PORT}...\n and connected to ${config.db.url}`,
+    );
   })
   .on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {

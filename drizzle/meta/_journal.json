@@ -8,6 +8,20 @@
       "when": 1785292205426,
       "tag": "0000_clumsy_hammerhead",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785880955490,
+      "tag": "0001_giant_gamma_corps",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785881264918,
+      "tag": "0002_closed_james_howlett",
+      "breakpoints": true
     }
   ]
 }
