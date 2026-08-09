@@ -3,7 +3,8 @@ import { config } from "./config.js";
 import {
   BadRequestError,
   NotFoundError,
-  UnathorizedError,
+  UnauthorizedError,
+  InternalServerError,
   ForbiddenError,
 } from "./classes/errors.js";
 
@@ -38,13 +39,18 @@ export const errorHandler: ErrorMiddleware = (err, req, res, next) => {
       error: err.message,
     });
     next();
-  } else if (err instanceof UnathorizedError) {
+  } else if (err instanceof UnauthorizedError) {
     res.status(401).json({
       error: err.message,
     });
     next();
   } else if (err instanceof ForbiddenError) {
     res.status(403).json({
+      error: err.message,
+    });
+    next();
+  } else if (err instanceof InternalServerError) {
+    res.status(500).json({
       error: err.message,
     });
     next();

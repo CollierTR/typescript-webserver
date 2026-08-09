@@ -3,11 +3,17 @@ import { Request, Response } from "express";
 import path from "path";
 import { logResponses, userMetrics } from "./middleware.js";
 import { errorHandler } from "./middleware.js";
-import { BadRequestError, NotFoundError } from "./classes/errors.js";
+import {
+  BadRequestError,
+  InternalServerError,
+  NotFoundError,
+  UnauthorizedError,
+} from "./classes/errors.js";
 import { config } from "./config.js";
 import { chirps, type NewChirp, users, type NewUser } from "./db/schema.js";
 import { db } from "./db/index.js";
 import { eq } from "drizzle-orm";
+import { checkPasswordHash, hashPassword } from "./auth.js";
 
 const PORT = 8080;
 
@@ -18,7 +24,13 @@ app.use(logResponses);
 
 app.post("/api/users", async (req, res) => {
   const body = req.body;
-  const { email } = body;
+  console.log(req.headers["content-type"]);
+  console.log(req.body);
+
+  const { email, password } = body;
+
+  const hash = await hashPassword(password);
+
   if (!email) {
     return res
       .set("Content-Type", "text/plain; charset=utf-8")
@@ -28,6 +40,7 @@ app.post("/api/users", async (req, res) => {
 
   const user: NewUser = {
     email: email,
+    hashedPassword: hash,
   };
 
   //check for user
@@ -42,12 +55,46 @@ app.post("/api/users", async (req, res) => {
       .send("User is already registered");
   }
 
-  const [newUser] = await db.insert(users).values(user).returning();
+  const [userWithPassword] = await db.insert(users).values(user).returning();
+  const { hashedPassword, ...safeUser } = userWithPassword;
 
   return res
     .set("Content-Type", "text/plain; charset=utf-8")
     .status(201)
-    .json(newUser);
+    .json(safeUser);
+});
+
+app.post("/api/login", async (req, res, next) => {
+  try {
+    // check password
+    const { email, password } = req.body;
+    if (!email || !password) {
+      throw new BadRequestError("Email and Password required!");
+    }
+
+    const existingUser = await db.query.users.findFirst({
+      where: eq(users.email, email),
+    });
+
+    if (!existingUser) {
+      throw new UnauthorizedError("incorrect email or password");
+    }
+
+    const passwordMatch = await checkPasswordHash(
+      password,
+      existingUser.hashedPassword,
+    );
+
+    const { hashedPassword, ...safeUser } = existingUser;
+
+    if (!passwordMatch) {
+      throw new UnauthorizedError("incorrect email or password");
+    } else {
+      res.status(200).json(safeUser);
+    }
+  } catch (e) {
+    next(e);
+  }
 });
 
 app.get("/api/healthz", (req, res) => {
