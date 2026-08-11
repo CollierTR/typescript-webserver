@@ -60,9 +60,7 @@ export const errorHandler: ErrorMiddleware = (err, req, res, next) => {
     });
     next();
   } else {
-    // res.status(500).json({
-    //   error: "Something went wrong...",
-    // });
+    res.status(500).json({ error: "Something went wrong..." });
     next();
   }
 };

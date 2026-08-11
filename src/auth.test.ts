@@ -32,7 +32,7 @@ describe("JWT Signing", () => {
   const expiresIn = Math.floor(Date.now() / 1000) + 60 * 60 * 24;
 
   it("should sign and match JWT solution", () => {
-    const jwt = makeJWT("117", expiresIn, secret);
+    const jwt = makeJWT("117", secret);
     const result = validateJWT(jwt, secret);
 
     expect(result).toBe("117");
@@ -44,7 +44,7 @@ describe("Bearer Token Retrieval", () => {
   const expiresIn = Math.floor(Date.now() / 1000) + 60 * 60 * 24;
 
   it("should retrieve the bearer token from the Authorization header", () => {
-    const jwt = makeJWT("117", expiresIn, secret);
+    const jwt = makeJWT("117", secret);
 
     const req = {
       get: (header: string) => {

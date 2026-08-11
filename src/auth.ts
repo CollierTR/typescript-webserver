@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
 import type { Request } from "express";
 import { UnauthorizedError } from "./classes/errors.js";
+import { randomBytes } from "crypto";
 
 export type Payload = Pick<JwtPayload, "iss" | "sub" | "iat" | "exp">;
 
@@ -21,16 +22,12 @@ export async function checkPasswordHash(
   return verification;
 }
 
-export function makeJWT(
-  userID: string,
-  expiresIn: number,
-  secret: string,
-): string {
+export function makeJWT(userID: string, secret: string): string {
   const payload: Payload = {
     iss: "chirpy",
     sub: userID,
     iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + expiresIn,
+    exp: Math.floor(Date.now() / 1000) + 60 * 60,
   };
   const newJwt = jwt.sign(payload, secret);
   return newJwt;
@@ -51,6 +48,9 @@ export function validateJWT(tokenString: string, secret: string): string {
     return decodedJwt.sub;
   } catch (e) {
     console.log(`Error: ${e}`);
+    if (e instanceof jwt.JsonWebTokenError) {
+      throw new UnauthorizedError("Invalid or malformed token");
+    }
     throw e;
   }
 }
@@ -67,5 +67,10 @@ export function getBearerToken(req: Request): string {
     throw new UnauthorizedError("Invalid bearer token");
   }
 
+  return token;
+}
+
+export function makeRefreshToken(): string {
+  const token = randomBytes(32).toString("hex");
   return token;
 }

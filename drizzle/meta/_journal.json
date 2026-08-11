@@ -36,6 +36,20 @@
       "when": 1785983055493,
       "tag": "0004_abandoned_baron_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786418621260,
+      "tag": "0005_left_killmonger",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786424170509,
+      "tag": "0006_common_inertia",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,14 @@ import {
   UnauthorizedError,
 } from "./classes/errors.js";
 import { config } from "./config.js";
-import { chirps, type NewChirp, users, type NewUser } from "./db/schema.js";
+import {
+  chirps,
+  type NewChirp,
+  users,
+  type NewUser,
+  refreshTokens,
+  type NewRefreshToken,
+} from "./db/schema.js";
 import { db } from "./db/index.js";
 import { eq } from "drizzle-orm";
 import {
@@ -19,6 +26,7 @@ import {
   getBearerToken,
   makeJWT,
   validateJWT,
+  makeRefreshToken,
 } from "./auth.js";
 
 const PORT = 8080;
@@ -73,11 +81,10 @@ app.post("/api/users", async (req, res) => {
 app.post("/api/login", async (req, res, next) => {
   try {
     // check password
-    let { email, password, expiresInSeconds } = req.body;
+    let { email, password } = req.body;
     if (!email || !password) {
       throw new BadRequestError("Email and Password required!");
     }
-    if (!expiresInSeconds || expiresInSeconds > 3600) expiresInSeconds = 3600;
 
     const existingUser = await db.query.users.findFirst({
       where: eq(users.email, email),
@@ -97,17 +104,79 @@ app.post("/api/login", async (req, res, next) => {
     if (!passwordMatch) {
       throw new UnauthorizedError("incorrect email or password");
     } else {
-      // authed here
-      const token = makeJWT(
-        safeUser.id,
-        expiresInSeconds,
-        config.api.signingSecret,
-      );
-      res.status(200).json({ ...safeUser, token: token });
+      const refreshTokenExpr =
+        Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 60; // 60 days from now
+      const refreshTokenValue = makeRefreshToken();
+
+      const refreshToken = {
+        token: refreshTokenValue,
+        userId: existingUser.id,
+        expiresAt: new Date(refreshTokenExpr * 1000), // 60 days from now
+      };
+
+      const [confirmation] = await db
+        .insert(refreshTokens)
+        .values(refreshToken)
+        .returning();
+
+      if (!confirmation) {
+        throw new InternalServerError(
+          "Something went wrong on our end... Try again in a few minutes.",
+        );
+      }
+
+      // auth here
+      const token = makeJWT(safeUser.id, config.api.signingSecret);
+      res.status(200).json({
+        ...safeUser,
+        token: token,
+        refreshToken: refreshTokenValue,
+      });
     }
   } catch (e) {
     next(e);
   }
+});
+
+app.post("/api/refresh", async (req, res) => {
+  const bearerToken = getBearerToken(req);
+
+  if (!bearerToken) {
+    throw new UnauthorizedError("User is unauthorized.");
+  }
+  const existingToken = await db.query.refreshTokens.findFirst({
+    where: eq(refreshTokens.token, bearerToken),
+  });
+  if (
+    !existingToken ||
+    existingToken.expiresAt < new Date() ||
+    existingToken.revokedAt
+  ) {
+    throw new UnauthorizedError("Refresh token is invalid");
+  }
+
+  const newJwt = makeJWT(existingToken.userId, config.api.signingSecret);
+
+  res.status(200).json({ token: newJwt });
+});
+
+app.post("/api/revoke", async (req, res) => {
+  const bearerToken = getBearerToken(req);
+
+  if (!bearerToken) {
+    throw new UnauthorizedError("User is not logged in");
+  }
+
+  const revokedToken = await db
+    .update(refreshTokens)
+    .set({
+      revokedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(refreshTokens.token, bearerToken))
+    .returning();
+
+  res.sendStatus(204);
 });
 
 app.get("/api/healthz", (req, res) => {
