@@ -1,6 +1,8 @@
 import { hash, verify } from "argon2";
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
+import type { Request } from "express";
+import { UnauthorizedError } from "./classes/errors.js";
 
 export type Payload = Pick<JwtPayload, "iss" | "sub" | "iat" | "exp">;
 
@@ -28,7 +30,7 @@ export function makeJWT(
     iss: "chirpy",
     sub: userID,
     iat: Math.floor(Date.now() / 1000),
-    exp: expiresIn,
+    exp: Math.floor(Date.now() / 1000) + expiresIn,
   };
   const newJwt = jwt.sign(payload, secret);
   return newJwt;
@@ -51,4 +53,19 @@ export function validateJWT(tokenString: string, secret: string): string {
     console.log(`Error: ${e}`);
     throw e;
   }
+}
+
+export function getBearerToken(req: Request): string {
+  const bearer = req.get("authorization");
+  if (!bearer) {
+    throw new UnauthorizedError("Missing bearer token");
+  }
+
+  const [scheme, token] = bearer.split(" ");
+
+  if (scheme !== "Bearer" || !token) {
+    throw new UnauthorizedError("Invalid bearer token");
+  }
+
+  return token;
 }

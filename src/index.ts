@@ -13,7 +13,13 @@ import { config } from "./config.js";
 import { chirps, type NewChirp, users, type NewUser } from "./db/schema.js";
 import { db } from "./db/index.js";
 import { eq } from "drizzle-orm";
-import { checkPasswordHash, hashPassword } from "./auth.js";
+import {
+  checkPasswordHash,
+  hashPassword,
+  getBearerToken,
+  makeJWT,
+  validateJWT,
+} from "./auth.js";
 
 const PORT = 8080;
 
@@ -67,10 +73,11 @@ app.post("/api/users", async (req, res) => {
 app.post("/api/login", async (req, res, next) => {
   try {
     // check password
-    const { email, password } = req.body;
+    let { email, password, expiresInSeconds } = req.body;
     if (!email || !password) {
       throw new BadRequestError("Email and Password required!");
     }
+    if (!expiresInSeconds || expiresInSeconds > 3600) expiresInSeconds = 3600;
 
     const existingUser = await db.query.users.findFirst({
       where: eq(users.email, email),
@@ -90,7 +97,13 @@ app.post("/api/login", async (req, res, next) => {
     if (!passwordMatch) {
       throw new UnauthorizedError("incorrect email or password");
     } else {
-      res.status(200).json(safeUser);
+      // authed here
+      const token = makeJWT(
+        safeUser.id,
+        expiresInSeconds,
+        config.api.signingSecret,
+      );
+      res.status(200).json({ ...safeUser, token: token });
     }
   } catch (e) {
     next(e);
@@ -167,16 +180,16 @@ app.get("/api/chirps/:chirpId", async (req, res) => {
 app.post("/api/chirps", async (req, res) => {
   const badWords = ["kerfuffle", "sharbert", "fornax"];
 
-  // extract and validate the body (userId, body) (userId, body)
-  const { userId, body } = req.body;
+  const { body } = req.body;
 
-  if (!userId || !body) {
-    throw new BadRequestError(
-      "Require both userId and body in request payload",
-    );
+  if (!body) {
+    throw new BadRequestError("Chirp body is required");
   }
 
-  if (typeof userId !== "string" || typeof body !== "string") {
+  const token = getBearerToken(req);
+  const userId = validateJWT(token, config.api.signingSecret);
+
+  if (typeof body !== "string") {
     throw new BadRequestError("Invalid request");
   }
 
