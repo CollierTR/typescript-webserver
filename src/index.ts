@@ -5,6 +5,7 @@ import { logResponses, userMetrics } from "./middleware.js";
 import { errorHandler } from "./middleware.js";
 import {
   BadRequestError,
+  ForbiddenError,
   InternalServerError,
   NotFoundError,
   UnauthorizedError,
@@ -19,7 +20,7 @@ import {
   type NewRefreshToken,
 } from "./db/schema.js";
 import { db } from "./db/index.js";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   checkPasswordHash,
   hashPassword,
@@ -28,6 +29,7 @@ import {
   validateJWT,
   makeRefreshToken,
 } from "./auth.js";
+import { error } from "console";
 
 const PORT = 8080;
 
@@ -76,6 +78,29 @@ app.post("/api/users", async (req, res) => {
     .set("Content-Type", "text/plain; charset=utf-8")
     .status(201)
     .json(safeUser);
+});
+
+app.put("/api/users", async (req, res) => {
+  const bearer = getBearerToken(req);
+  const { email, password } = req.body;
+  if (!email || !password) {
+    throw new BadRequestError("Request body must include email and password");
+  }
+  const userId = validateJWT(bearer, config.api.signingSecret);
+  const newPassword = await hashPassword(password);
+  const [updatedUser] = await db
+    .update(users)
+    .set({ hashedPassword: newPassword, email: email })
+    .where(eq(users.id, userId))
+    .returning();
+
+  if (!updatedUser) {
+    throw new NotFoundError("User not found");
+  }
+
+  const { hashedPassword, ...safeUser } = updatedUser;
+
+  res.status(200).json(safeUser);
 });
 
 app.post("/api/login", async (req, res, next) => {
@@ -141,9 +166,6 @@ app.post("/api/login", async (req, res, next) => {
 app.post("/api/refresh", async (req, res) => {
   const bearerToken = getBearerToken(req);
 
-  if (!bearerToken) {
-    throw new UnauthorizedError("User is unauthorized.");
-  }
   const existingToken = await db.query.refreshTokens.findFirst({
     where: eq(refreshTokens.token, bearerToken),
   });
@@ -244,6 +266,24 @@ app.get("/api/chirps/:chirpId", async (req, res) => {
   }
 
   res.status(200).json(chirp);
+});
+
+app.delete("/api/chirps/:chirpId", async (req, res) => {
+  const bearer = getBearerToken(req);
+  const userId = validateJWT(bearer, config.api.signingSecret);
+
+  const { chirpId } = req.params;
+
+  const [chirp] = await db.select().from(chirps).where(eq(chirps.id, chirpId));
+  if (!chirp) {
+    throw new NotFoundError("Chirp does not exist");
+  }
+  if (chirp.userId !== userId) {
+    throw new ForbiddenError("Unauthorized to edit another user's chirps!");
+  }
+
+  await db.delete(chirps).where(eq(chirps.id, chirpId));
+  res.sendStatus(204);
 });
 
 app.post("/api/chirps", async (req, res) => {
