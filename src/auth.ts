@@ -70,6 +70,21 @@ export function getBearerToken(req: Request): string {
   return token;
 }
 
+export function getAPIKey(req: Request): string {
+  const bearer = req.get("authorization");
+  if (!bearer) {
+    throw new UnauthorizedError("Missing API key");
+  }
+
+  const [scheme, token] = bearer.split(" ");
+
+  if (scheme !== "ApiKey" || !token) {
+    throw new UnauthorizedError("Invalid bearer token");
+  }
+
+  return token;
+}
+
 export function makeRefreshToken(): string {
   const token = randomBytes(32).toString("hex");
   return token;

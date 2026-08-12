@@ -50,6 +50,13 @@
       "when": 1786424170509,
       "tag": "0006_common_inertia",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786507636536,
+      "tag": "0007_happy_wrecker",
+      "breakpoints": true
     }
   ]
 }

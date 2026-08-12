@@ -14,6 +14,7 @@ type DBConfig = {
 type APIConfig = {
   fileserverHits: number;
   signingSecret: string;
+  polkaKey: string;
 };
 
 type Config = {
@@ -25,6 +26,7 @@ export const config: Config = {
   api: {
     fileserverHits: 0,
     signingSecret: process.env.SIGNING_KEY!,
+    polkaKey: process.env.POLKA_KEY!,
   },
   db: {
     url: process.env.DB_URL!,

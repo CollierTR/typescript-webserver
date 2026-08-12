@@ -28,6 +28,7 @@ import {
   makeJWT,
   validateJWT,
   makeRefreshToken,
+  getAPIKey,
 } from "./auth.js";
 import { error } from "console";
 
@@ -318,6 +319,31 @@ app.post("/api/chirps", async (req, res) => {
   const [newChirp] = await db.insert(chirps).values(chirp).returning();
 
   res.status(201).json(newChirp);
+});
+
+app.post("/api/polka/webhooks", async (req, res) => {
+  const apiKey = getAPIKey(req);
+
+  if (apiKey !== config.api.polkaKey) {
+    throw new UnauthorizedError("Not authorized");
+  }
+
+  const { event, data } = req.body;
+  if (event !== "user.upgraded") {
+    return res.sendStatus(204);
+  }
+
+  const [updatedUser] = await db
+    .update(users)
+    .set({ isChirpyRed: true })
+    .where(eq(users.id, data.userId))
+    .returning();
+
+  if (!updatedUser) {
+    throw new NotFoundError("User does not exist");
+  }
+
+  return res.sendStatus(204);
 });
 
 app.use(errorHandler);
